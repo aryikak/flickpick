@@ -3,6 +3,12 @@
 import { useSession } from "next-auth/react"
 import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function RoomPage() {
   const { data: session } = useSession()
@@ -15,24 +21,24 @@ export default function RoomPage() {
   const [matches, setMatches] = useState<any[]>([])
 
   useEffect(() => {
-  fetchMovies()
-}, [])
+    fetchMovies()
+  }, [])
 
-const fetchMovies = async () => {
-  try {
-    const res = await fetch(`/api/movies`)
-    if (!res.ok) {
-      console.error("Movies API error:", res.status)
-      return
+  const fetchMovies = async () => {
+    try {
+      const res = await fetch(`/api/movies`)
+      if (!res.ok) {
+        console.error("Movies API error:", res.status)
+        return
+      }
+      const data = await res.json()
+      setMovies(data.movies || [])
+      setLoading(false)
+    } catch (err) {
+      console.error("Failed to fetch movies:", err)
+      setLoading(false)
     }
-    const data = await res.json()
-    setMovies(data.movies || [])
-    setLoading(false)
-  } catch (err) {
-    console.error("Failed to fetch movies:", err)
-    setLoading(false)
   }
-}
 
   const vote = async (liked: boolean) => {
     const movie = movies[currentIndex]
@@ -59,23 +65,23 @@ const fetchMovies = async () => {
   const currentMovie = movies[currentIndex]
 
   if (!currentMovie) {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-8">
-      <h1 className="text-3xl font-bold mb-2">You're done swiping!</h1>
-      <p className="text-gray-400 mb-8">Share this code with your group:</p>
-      <div className="bg-gray-800 px-6 py-3 rounded-2xl text-3xl font-mono font-bold mb-8 tracking-widest">
-        {code}
-      </div>
-      <MatchesPanel roomCode={code} />
-      <button
-        onClick={() => router.push("/dashboard")}
-        className="mt-8 text-gray-500 hover:text-gray-300 transition text-sm"
-      >
-        Back to Dashboard
-      </button>
-    </main>
-  )
-}
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-8">
+        <h1 className="text-3xl font-bold mb-2">You're done swiping!</h1>
+        <p className="text-gray-400 mb-8">Share this code with your group:</p>
+        <div className="bg-gray-800 px-6 py-3 rounded-2xl text-3xl font-mono font-bold mb-8 tracking-widest">
+          {code}
+        </div>
+        <MatchesPanel roomCode={code} />
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="mt-8 text-gray-500 hover:text-gray-300 transition text-sm"
+        >
+          Back to Dashboard
+        </button>
+      </main>
+    )
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-4">
@@ -117,7 +123,9 @@ const fetchMovies = async () => {
       </div>
     </main>
   )
-  function MatchesPanel({ roomCode }: { roomCode: string }) {
+}
+
+function MatchesPanel({ roomCode }: { roomCode: string }) {
   const [matchedIds, setMatchedIds] = useState<number[]>([])
   const [movieDetails, setMovieDetails] = useState<any[]>([])
 
@@ -127,7 +135,6 @@ const fetchMovies = async () => {
       const data = await res.json()
       if (data.matchedMovieIds?.length > 0) {
         setMatchedIds(data.matchedMovieIds)
-        // Fetch movie details for each match
         const details = await Promise.all(
           data.matchedMovieIds.map((id: number) =>
             fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}`)
@@ -137,16 +144,30 @@ const fetchMovies = async () => {
         setMovieDetails(details)
       }
     }
+
     fetchMatches()
-    const interval = setInterval(fetchMatches, 5000)
-    return () => clearInterval(interval)
+
+    const channel = supabase
+      .channel(`votes-${roomCode}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'votes' },
+        () => {
+          fetchMatches()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [roomCode])
 
   if (movieDetails.length === 0) {
     return (
       <div className="text-center">
         <p className="text-gray-400">No matches yet — waiting for your group...</p>
-        <p className="text-gray-600 text-sm mt-2">This updates every 5 seconds</p>
+        <p className="text-gray-600 text-sm mt-2">Updating in real time...</p>
       </div>
     )
   }
@@ -171,5 +192,4 @@ const fetchMovies = async () => {
       </div>
     </div>
   )
-}
 }
