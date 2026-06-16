@@ -78,11 +78,11 @@ const joinRoom = async () => {
       </div>
 
       <button
-        onClick={() => signOut()}
-        className="mt-12 text-gray-500 hover:text-gray-300 transition text-sm"
-      >
-        Sign out
-      </button>
+  onClick={() => signOut({ callbackUrl: "/" })}
+  className="mt-12 text-gray-500 hover:text-gray-300 transition text-sm"
+>
+  Sign out
+</button>
     </main>
   )
 }
