@@ -3,10 +3,25 @@
 import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { useEffect } from "react"
 
 export default function Dashboard() {
-  const { data: session } = useSession()
-  const router = useRouter()
+  const { data: session, status } = useSession()
+const router = useRouter()
+
+useEffect(() => {
+  if (status === "unauthenticated") {
+    router.push("/")
+  }
+}, [status, router])
+
+if (status === "loading") {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-black text-white">
+      <p>Loading...</p>
+    </main>
+  )
+}
   const [roomName, setRoomName] = useState("")
   const [joinCode, setJoinCode] = useState("")
   const [loading, setLoading] = useState(false)
