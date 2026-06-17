@@ -18,7 +18,9 @@ export default function RoomPage() {
   const [movies, setMovies] = useState<any[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [matches, setMatches] = useState<any[]>([])
+  const [matchedMovies, setMatchedMovies] = useState<any[]>([])
+  const [likedMovies, setLikedMovies] = useState<any[]>([])
+  const [showPanel, setShowPanel] = useState<'matches' | 'likes' | null>(null)
 
   useEffect(() => {
     fetchMovies()
@@ -27,10 +29,7 @@ export default function RoomPage() {
   const fetchMovies = async () => {
     try {
       const res = await fetch(`/api/movies`)
-      if (!res.ok) {
-        console.error("Movies API error:", res.status)
-        return
-      }
+      if (!res.ok) return
       const data = await res.json()
       setMovies(data.movies || [])
       setLoading(false)
@@ -51,6 +50,9 @@ export default function RoomPage() {
         vote: liked,
       }),
     })
+    if (liked) {
+      setLikedMovies((prev) => [...prev, movie])
+    }
     setCurrentIndex((prev) => prev + 1)
   }
 
@@ -86,11 +88,63 @@ export default function RoomPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-4">
       <div className="w-full max-w-sm">
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-xl font-bold">🎬 FlickPick</h1>
-          <span className="bg-gray-800 px-3 py-1 rounded-full text-sm font-mono">{code}</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowPanel(showPanel === 'likes' ? null : 'likes')}
+              className="bg-gray-800 px-3 py-1 rounded-full text-sm hover:bg-gray-700 transition"
+            >
+              ❤️ {likedMovies.length}
+            </button>
+            <button
+              onClick={() => setShowPanel(showPanel === 'matches' ? null : 'matches')}
+              className="bg-gray-800 px-3 py-1 rounded-full text-sm hover:bg-gray-700 transition"
+            >
+              🎉 {matchedMovies.length}
+            </button>
+            <span className="bg-gray-800 px-3 py-1 rounded-full text-sm font-mono">{code}</span>
+          </div>
         </div>
 
+        {/* Sliding Panel */}
+        {showPanel && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 z-50 flex items-end justify-center" onClick={() => setShowPanel(null)}>
+            <div className="bg-gray-900 rounded-t-3xl p-6 w-full max-w-sm max-h-96 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">{showPanel === 'matches' ? '🎉 Group Matches' : '❤️ My Likes'}</h2>
+                <button onClick={() => setShowPanel(null)} className="text-gray-400">✕</button>
+              </div>
+              {showPanel === 'matches' && (
+                <MatchesPanel roomCode={code} onMatchesUpdate={setMatchedMovies} />
+              )}
+              {showPanel === 'likes' && (
+                <div className="space-y-3">
+                  {likedMovies.length === 0 ? (
+                    <p className="text-gray-400 text-center">Nothing liked yet!</p>
+                  ) : (
+                    likedMovies.map((movie) => (
+                      <div key={movie.id} className="flex gap-4 bg-gray-800 rounded-2xl p-3 items-center">
+                        <img
+                          src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
+                          alt={movie.title}
+                          className="w-10 h-14 rounded-lg object-cover"
+                        />
+                        <div>
+                          <p className="font-semibold text-sm">{movie.title}</p>
+                          <p className="text-gray-400 text-xs">{movie.release_date?.split("-")[0]} • ⭐ {movie.vote_average?.toFixed(1)}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Movie Card */}
         <div className="relative bg-gray-900 rounded-3xl overflow-hidden shadow-2xl">
           <img
             src={`https://image.tmdb.org/t/p/w500${currentMovie.poster_path}`}
@@ -104,6 +158,7 @@ export default function RoomPage() {
           </div>
         </div>
 
+        {/* Buttons */}
         <div className="flex gap-4 mt-6 justify-center">
           <button
             onClick={() => vote(false)}
@@ -125,8 +180,7 @@ export default function RoomPage() {
   )
 }
 
-function MatchesPanel({ roomCode }: { roomCode: string }) {
-  const [matchedIds, setMatchedIds] = useState<number[]>([])
+function MatchesPanel({ roomCode, onMatchesUpdate }: { roomCode: string, onMatchesUpdate?: (movies: any[]) => void }) {
   const [movieDetails, setMovieDetails] = useState<any[]>([])
 
   useEffect(() => {
@@ -134,7 +188,6 @@ function MatchesPanel({ roomCode }: { roomCode: string }) {
       const res = await fetch(`/api/matches?roomCode=${roomCode}`)
       const data = await res.json()
       if (data.matchedMovieIds?.length > 0) {
-        setMatchedIds(data.matchedMovieIds)
         const details = await Promise.all(
           data.matchedMovieIds.map((id: number) =>
             fetch(`https://api.themoviedb.org/3/movie/${id}?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}`)
@@ -142,6 +195,7 @@ function MatchesPanel({ roomCode }: { roomCode: string }) {
           )
         )
         setMovieDetails(details)
+        onMatchesUpdate?.(details)
       }
     }
 
@@ -152,9 +206,7 @@ function MatchesPanel({ roomCode }: { roomCode: string }) {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'votes' },
-        () => {
-          fetchMatches()
-        }
+        () => fetchMatches()
       )
       .subscribe()
 
@@ -165,31 +217,28 @@ function MatchesPanel({ roomCode }: { roomCode: string }) {
 
   if (movieDetails.length === 0) {
     return (
-      <div className="text-center">
+      <div className="text-center py-4">
         <p className="text-gray-400">No matches yet — waiting for your group...</p>
-        <p className="text-gray-600 text-sm mt-2">Updating in real time...</p>
+        <p className="text-gray-600 text-sm mt-2">Updates in real time</p>
       </div>
     )
   }
 
   return (
-    <div className="w-full max-w-sm">
-      <h2 className="text-xl font-bold mb-4 text-center">🎉 Matches!</h2>
-      <div className="space-y-4">
-        {movieDetails.map((movie) => (
-          <div key={movie.id} className="flex gap-4 bg-gray-900 rounded-2xl p-4 items-center">
-            <img
-              src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
-              alt={movie.title}
-              className="w-12 h-16 rounded-lg object-cover"
-            />
-            <div>
-              <p className="font-semibold">{movie.title}</p>
-              <p className="text-gray-400 text-sm">{movie.release_date?.split("-")[0]} • ⭐ {movie.vote_average?.toFixed(1)}</p>
-            </div>
+    <div className="space-y-3">
+      {movieDetails.map((movie) => (
+        <div key={movie.id} className="flex gap-4 bg-gray-800 rounded-2xl p-3 items-center">
+          <img
+            src={`https://image.tmdb.org/t/p/w92${movie.poster_path}`}
+            alt={movie.title}
+            className="w-10 h-14 rounded-lg object-cover"
+          />
+          <div>
+            <p className="font-semibold text-sm">{movie.title}</p>
+            <p className="text-gray-400 text-xs">{movie.release_date?.split("-")[0]} • ⭐ {movie.vote_average?.toFixed(1)}</p>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   )
 }
