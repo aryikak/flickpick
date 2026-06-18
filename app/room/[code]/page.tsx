@@ -71,9 +71,15 @@ export default function RoomPage() {
       <main className="flex min-h-screen flex-col items-center justify-center bg-black text-white p-8">
         <h1 className="text-3xl font-bold mb-2">You're done swiping!</h1>
         <p className="text-gray-400 mb-8">Share this code with your group:</p>
-        <div className="bg-gray-800 px-6 py-3 rounded-2xl text-3xl font-mono font-bold mb-8 tracking-widest">
-          {code}
-        </div>
+        <button
+  onClick={() => {
+    navigator.clipboard.writeText(code)
+    alert("Room code copied!")
+  }}
+  className="bg-gray-800 px-6 py-3 rounded-2xl text-3xl font-mono font-bold mb-8 tracking-widest hover:bg-gray-700 transition"
+>
+  {code} 📋
+</button>
         <MatchesPanel roomCode={code} />
         <button
           onClick={() => router.push("/dashboard")}
@@ -104,8 +110,15 @@ export default function RoomPage() {
             >
               🎉 {matchedMovies.length}
             </button>
-            <span className="bg-gray-800 px-3 py-1 rounded-full text-sm font-mono">{code}</span>
-          </div>
+<button
+  onClick={() => {
+    navigator.clipboard.writeText(code)
+    alert("Room code copied!")
+  }}
+  className="bg-gray-800 px-3 py-1 rounded-full text-sm font-mono hover:bg-gray-700 transition"
+>
+  {code} 📋
+</button>          </div>
         </div>
 
         {/* Sliding Panel */}
